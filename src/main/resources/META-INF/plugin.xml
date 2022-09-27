@@ -1,0 +1,22 @@
+<idea-plugin>
+    <id>com.github.yahito.kibanaplugin</id>
+    <name>KibanaOpener</name>
+    <vendor>yahito</vendor>
+
+    <actions>
+        <group id="KibanaOpenerPluginGroupId" class="com.yahito.kibanaplugin.ui.KibanaOpenerActionGroup" popup="true" text="Kibana">
+            <add-to-group group-id="GenerateGroup" anchor="last"/>
+        </group>
+    </actions>
+
+    <depends>org.jetbrains.kotlin</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <applicationService serviceImplementation="com.yahito.kibanaplugin.config.KibanaPluginProjectSettings"/>
+        <projectConfigurable instance="com.yahito.kibanaplugin.config.Config"
+                             parentId="build"
+                             id="com.yahito.kibanaplugin.config.Config"
+                             nonDefaultProject="true"/>
+    </extensions>
+
+</idea-plugin>

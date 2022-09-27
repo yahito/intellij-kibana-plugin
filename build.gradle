@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id "org.jetbrains.kotlin.jvm" version '1.3.70'
+    id "org.jetbrains.intellij" version "0.7.2"
+}
+sourceSets {
+    main.java.srcDirs = ['src/main/java']
+    main.kotlin.srcDirs = ['src/main/java', 'src/main/kotLin']
+    main.resources.srcDirs = ['src/main/resources']
+}
+patchPluginXml {
+    sinceBuild '162'
+    untilBuild '300'
+}
+repositories {
+    mavenCentral()
+    maven {
+
+        url "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+    maven {
+        url 'https://dl.bintray.com/jetbrains/intellig-plugin-service'
+    }
+    maven {
+        url "https://cache-redirector.jetbrains.com/jetbrains.bintray.com/intellig-third-party-dependencies"
+    }
+}
+intellij {
+    plugins = ['com.intellij.java', 'Kotlin']
+    version '2020.1'
+}
+repositories {
+    mavenCentral()
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+    kotlinOptions {
+        jvmTarget = "11"
+    }
+}
+
+ext.kotlin_version = '1.3.70'
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    testImplementation 'junit:junit:4.11'
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+}
+wrapper {
+    gradleVersion = '6.7.1'
+    distributionUrl = "https://cache-redirector.jetbrains.com/services.gradle.org/distributions/gradle-${gradleVersion}-all.zip"
+}
