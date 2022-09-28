@@ -2,6 +2,7 @@
     <id>com.github.yahito.kibanaplugin</id>
     <name>KibanaOpener</name>
     <vendor>yahito</vendor>
+    <version>0.0.1</version>
 
     <actions>
         <group id="KibanaOpenerPluginGroupId" class="com.yahito.kibanaplugin.ui.KibanaOpenerActionGroup" popup="true" text="Kibana">
