@@ -11,7 +11,7 @@ class Config(val project: Project) : SearchableConfigurable {
     private var settingsForm: SettingsForm? = null
 
     override fun getId(): String {
-        return "com.github.yahito.kibanaplugin.config.Config"
+        return "com.yahito.kibanaplugin.config.Config"
     }
 
     override  fun getDisplayName(): String {

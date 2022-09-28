@@ -1,5 +1,5 @@
 <idea-plugin>
-    <id>com.github.yahito.kibanaplugin</id>
+    <id>com.yahito.kibanaplugin</id>
     <name>KibanaOpener</name>
     <vendor>yahito</vendor>
     <version>0.0.1</version>
