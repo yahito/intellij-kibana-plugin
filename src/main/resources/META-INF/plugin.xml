@@ -3,6 +3,7 @@
     <name>KibanaOpener</name>
     <vendor>yahito</vendor>
     <version>0.0.1</version>
+    <description>Plugin provides an easy way to open kibana UI from IDE</description>
 
     <actions>
         <group id="KibanaOpenerPluginGroupId" class="com.yahito.kibanaplugin.ui.KibanaOpenerActionGroup" popup="true" text="Kibana">
