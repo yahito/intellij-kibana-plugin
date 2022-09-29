@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.builder
 
 import org.apache.http.client.utils.URIBuilder
 import java.net.URLDecoder
@@ -16,7 +16,6 @@ class KibanaUrlBuilder(private val url: String, private val dateCondition: DateC
         builder.addParameter("_a", query.create())
 
         val url = URLDecoder.decode(builder.build().toString().replace("%23/discover", "#/discover"), "UTF-8")
-        println(url)
         return url
     }
 }

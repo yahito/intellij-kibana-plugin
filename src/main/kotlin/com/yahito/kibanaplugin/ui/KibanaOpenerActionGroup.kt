@@ -8,7 +8,7 @@ import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.components.ServiceManager
 import com.yahito.kibanaplugin.config.KibanaPluginProjectSettings
 import com.yahito.kibanaplugin.config.KibanaPluginSettings
-import com.yahito.kibanaplugin.url.KibanaUrlOpener
+import com.yahito.kibanaplugin.url.opener.KibanaUrlOpener
 
 class KibanaOpenerActionGroup : ActionGroup() {
     override fun getChildren(e: AnActionEvent?): Array<AnAction> {

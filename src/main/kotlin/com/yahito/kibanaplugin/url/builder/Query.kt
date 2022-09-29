@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.builder
 
 import java.util.stream.Collectors
 

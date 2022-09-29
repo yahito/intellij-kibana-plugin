@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.builder
 
 class Filter(private val index: Index, private val key: String, private val value: CharSequence): QueryPart() {
     override fun createInternal(): String {

@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.builder
 
 abstract class QueryPart {
     fun create(): String {

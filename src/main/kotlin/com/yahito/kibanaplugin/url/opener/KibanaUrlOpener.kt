@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.opener
 
 import com.google.common.collect.ImmutableMap
 import com.intellij.ide.BrowserUtil
@@ -7,6 +7,8 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.*
 import com.intellij.psi.impl.JavaConstantExpressionEvaluator
 import com.intellij.psi.util.PsiTreeUtil
+import com.yahito.kibanaplugin.url.*
+import com.yahito.kibanaplugin.url.builder.*
 import org.jetbrains.kotlin.psi.KtFile
 import java.util.regex.Pattern
 import java.util.stream.Collectors

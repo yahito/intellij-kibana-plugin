@@ -1,4 +1,4 @@
-package com.yahito.kibanaplugin.url
+package com.yahito.kibanaplugin.url.builder
 
 class DateCondition(private val interval: String?) : QueryPart() {
 
