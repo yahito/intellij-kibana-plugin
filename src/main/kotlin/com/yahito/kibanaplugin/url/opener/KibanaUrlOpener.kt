@@ -15,10 +15,10 @@ import java.util.stream.Collectors
 
 class KibanaUrlOpener {
 
-    fun eval(parentExpression: PsiExpression): String {
+    private fun eval(parentExpression: PsiExpression): String {
         val computedValue = StringBuilder()
         if (parentExpression is PsiPolyadicExpression) {
-            for (operand in parentExpression.getOperands()) {
+            for (operand in parentExpression.operands) {
                 if (operand is PsiReference) {
                     val probableDefinition = (operand as PsiReference).resolve()
                     if (probableDefinition is PsiVariable) {

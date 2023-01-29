@@ -7,18 +7,18 @@ import javax.swing.JPanel
 import javax.swing.JTextField
 
 class StringValueDialog(parent: Component, canBeParent: Boolean) : DialogWrapper(parent, canBeParent) {
-    private var myTextField: JTextField? = null
-    private var myMainPanel: JPanel? = null
+    private var textField: JTextField? = null
+    private var panel: JPanel? = null
 
     override fun createCenterPanel(): JComponent? {
-        return myMainPanel
+        return panel
     }
 
     val stringValue: String
-        get() = myTextField!!.text
+        get() = textField!!.text
 
     override fun getPreferredFocusedComponent(): JComponent? {
-        return myTextField
+        return textField
     }
 
     init {
