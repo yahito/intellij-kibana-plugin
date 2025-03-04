@@ -1,7 +1,7 @@
 plugins {
     id 'java'
-    id "org.jetbrains.kotlin.jvm" version '1.3.70'
-    id "org.jetbrains.intellij" version "0.7.2"
+    id "org.jetbrains.kotlin.jvm" version '1.9.21'
+    id "org.jetbrains.intellij" version "1.17.4"
 }
 sourceSets {
     main.java.srcDirs = ['src/main/java']
@@ -9,13 +9,12 @@ sourceSets {
     main.resources.srcDirs = ['src/main/resources']
 }
 patchPluginXml {
-    sinceBuild '162'
-    untilBuild '300'
+    sinceBuild.set("233") // Updated to match the 2023.3 version
+    untilBuild.set("241.*") // Updated to support current versions
 }
 repositories {
     mavenCentral()
     maven {
-
         url "https://oss.sonatype.org/content/repositories/snapshots/"
     }
     maven {
@@ -26,26 +25,35 @@ repositories {
     }
 }
 intellij {
-    plugins = ['com.intellij.java', 'Kotlin']
-    version '2020.1'
+    plugins.set(['com.intellij.java', 'Kotlin'])
+    version.set('2023.3') // Updated to a more recent version
+    type.set('IC') // Community Edition
 }
 repositories {
     mavenCentral()
 }
 
-tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
-    kotlinOptions {
-        jvmTarget = "11"
+// Configure JVM toolchain for consistent Java compilation
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
 
-ext.kotlin_version = '1.3.70'
+// Configure Kotlin compilation to use the same Java version
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+ext.kotlin_version = '1.9.21'
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
     testImplementation 'junit:junit:4.11'
     testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
 }
 wrapper {
-    gradleVersion = '6.7.1'
+    gradleVersion = '8.5.1'
     distributionUrl = "https://cache-redirector.jetbrains.com/services.gradle.org/distributions/gradle-${gradleVersion}-all.zip"
 }

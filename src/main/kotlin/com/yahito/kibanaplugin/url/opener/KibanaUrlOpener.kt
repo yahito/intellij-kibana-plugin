@@ -13,151 +13,237 @@ import org.jetbrains.kotlin.psi.KtFile
 import java.util.regex.Pattern
 import java.util.stream.Collectors
 
+/**
+ * Opens Kibana URLs based on the current context in the editor.
+ * Handles Java and Kotlin files to extract relevant information for Kibana queries.
+ */
 class KibanaUrlOpener {
 
-    private fun eval(parentExpression: PsiExpression): String {
-        val computedValue = StringBuilder()
-        if (parentExpression is PsiPolyadicExpression) {
-            for (operand in parentExpression.operands) {
-                if (operand is PsiReference) {
-                    val probableDefinition = (operand as PsiReference).resolve()
-                    if (probableDefinition is PsiVariable) {
-                        val initializer = probableDefinition.initializer
-                        if (initializer != null) {
-                            val o = JavaConstantExpressionEvaluator.computeConstantExpression(initializer, true)
-                            if (o is String) {
-                                computedValue.append(o.toString())
-                            }
-                        }
-                    }
-                } else {
-                    val value = JavaConstantExpressionEvaluator.computeConstantExpression(operand, true)
-                    if (value is String) {
-                        computedValue.append(value);
-                    }
-                }
-            }
-        } else if (parentExpression is PsiReference) {
-            val probableDefinition = parentExpression.resolve();
-            if (probableDefinition is PsiVariable) {
-                val initializer = probableDefinition.initializer
-                if (initializer != null) {
-                    val o = JavaConstantExpressionEvaluator.computeConstantExpression(initializer, true)
-                    if (o is String) {
-                        computedValue.append(o.toString())
-                    }
-                }
-            }
-        } else {
-            return parentExpression.text
-        }
-        return computedValue.toString()
+    companion object {
+        private val HTTP_METHOD_ANNOTATIONS = mapOf(
+            "org.springframework.web.bind.annotation.GetMapping" to "GET",
+            "org.springframework.web.bind.annotation.PostMapping" to "POST",
+            "org.springframework.web.bind.annotation.DeleteMapping" to "DELETE",
+            "org.springframework.web.bind.annotation.PatchMapping" to "PATCH"
+        )
 
+        private const val REQUEST_MAPPING_ANNOTATION = "org.springframework.web.bind.annotation.RequestMapping"
+        private const val STRING_TYPE = "java.lang.String"
+        private const val LOGGER_SUFFIX = ".Logger"
     }
 
-    fun openKibana(editor: Editor, dataContext: DataContext?, url: String, indexValue: String, params: Map<String, String>) {
-        val file = dataContext?.getData("psi.File")
-        var className: String?
-        val findReferenceAt: PsiReference?
-        val caretOffset: Int = editor.caretModel.offset
+    /**
+     * Evaluates a PsiExpression to extract its string value.
+     */
+    private fun eval(parentExpression: PsiExpression): String {
+        return when (parentExpression) {
+            is PsiPolyadicExpression -> evaluatePolyadicExpression(parentExpression)
+            is PsiReference -> evaluateReference(parentExpression)
+            else -> parentExpression.text
+        }
+    }
 
-        when (file) {
-            is PsiJavaFile -> {
-                className =
-                    file.packageName + "." + file.name.substring(0, file.name.indexOf("."))
+    /**
+     * Evaluates a polyadic expression (e.g., string concatenation).
+     */
+    private fun evaluatePolyadicExpression(expression: PsiPolyadicExpression): String {
+        val computedValue = StringBuilder()
 
-                if (className.startsWith(".")) {
-                    className = className.substring(1, className.length)
+        for (operand in expression.operands) {
+            when (operand) {
+                is PsiReference -> {
+                    val resolvedValue = evaluateReference(operand)
+                    if (resolvedValue.isNotEmpty()) {
+                        computedValue.append(resolvedValue)
+                    }
                 }
-                findReferenceAt = file.findReferenceAt(caretOffset)
-            }
-            is KtFile -> {
-                className = file.packageFqName.asString()  + "." + file.name.substring(0, file.name.indexOf("."))
-                findReferenceAt = file.findReferenceAt(caretOffset)
-            }
-            else -> {
-                throw java.lang.IllegalArgumentException("Unsupported file type")
+                else -> {
+                    val value = JavaConstantExpressionEvaluator.computeConstantExpression(operand, true)
+                    if (value is String) {
+                        computedValue.append(value)
+                    }
+                }
             }
         }
 
+        return computedValue.toString()
+    }
 
-        val currentElement = findReferenceAt?.element
+    /**
+     * Evaluates a reference expression to extract its string value.
+     */
+    private fun evaluateReference(reference: PsiReference): String {
+        val probableDefinition = reference.resolve()
+
+        if (probableDefinition is PsiVariable) {
+            val initializer = probableDefinition.initializer ?: return ""
+
+            val value = JavaConstantExpressionEvaluator.computeConstantExpression(initializer, true)
+            if (value is String) {
+                return value
+            }
+        }
+
+        return ""
+    }
+
+    /**
+     * Main entry point to open Kibana with the context from the editor.
+     */
+    fun openKibana(editor: Editor, dataContext: DataContext?, url: String, indexValue: String, params: Map<String, String>) {
+        val file = dataContext?.getData("psi.File") ?: throw IllegalArgumentException("File not found")
+        val caretOffset = editor.caretModel.offset
+
+        // Extract class information and reference at caret
+        val (className, findReferenceAt) = when (file) {
+            is PsiJavaFile -> extractJavaFileInfo(file, caretOffset)
+            is KtFile -> extractKotlinFileInfo(file, caretOffset)
+            else -> throw IllegalArgumentException("Unsupported file type: ${file.javaClass.name}")
+        }
+
+        val currentElement = findReferenceAt?.element ?: return
         val call = PsiTreeUtil.getParentOfType(currentElement, PsiMethodCallExpression::class.java)
-
-        val expression: PsiReferenceExpression? = PsiTreeUtil.getChildOfType(call, PsiReferenceExpression::class.java)
-
-        PsiTreeUtil.getParentOfType(currentElement, PsiAnnotation::class.java)?.nameReferenceElement?.qualifiedName
+        val expression = PsiTreeUtil.getChildOfType(call, PsiReferenceExpression::class.java)
         val annotation = PsiTreeUtil.getParentOfType(currentElement, PsiAnnotation::class.java)
 
-        val (uri: String?, method: String?) = parseHttpMethod(annotation, currentElement)
+        val (uri, method) = parseHttpMethod(annotation, currentElement)
+        val methodCallExpression = PsiTreeUtil.getChildOfAnyType(
+            expression,
+            PsiMethodCallExpression::class.java,
+            PsiReferenceExpression::class.java
+        )
 
-        val methodCallExpression: PsiExpression? = PsiTreeUtil.getChildOfAnyType(expression, PsiMethodCallExpression::class.java, PsiReferenceExpression::class.java)
-
-        if (methodCallExpression?.type?.canonicalText?.endsWith(".Logger") == true) {
-            val paramList: PsiExpressionList? = PsiTreeUtil.getChildOfType(call, PsiExpressionList::class.java)
-            val text: String? = getText(paramList)
-            val psiIdentifier: PsiIdentifier? = PsiTreeUtil.getChildOfType(expression, PsiIdentifier::class.java)
-            val level = psiIdentifier?.text
-            if (level != null && (level == "info" || level == "debug" || level == "error" || level == "warn")) {
-                openKibana(text, level.toUpperCase(), className, uri, method, url, indexValue, params)
-            }
+        if (isLoggerCall(methodCallExpression)) {
+            handleLoggerCall(call, expression, className, uri, method, url, indexValue, params)
         } else {
             openKibana(getText(currentElement), null, className, uri, method, url, indexValue, params)
         }
     }
 
+    /**
+     * Extract information from a Java file.
+     */
+    private fun extractJavaFileInfo(file: PsiJavaFile, caretOffset: Int): Pair<String, PsiReference?> {
+        var className = file.packageName + "." + file.name.substringBefore(".")
+        if (className.startsWith(".")) {
+            className = className.substring(1)
+        }
+        return Pair(className, file.findReferenceAt(caretOffset))
+    }
 
-    private fun getText(paramList: PsiElement?): String? {
+    /**
+     * Extract information from a Kotlin file.
+     */
+    private fun extractKotlinFileInfo(file: KtFile, caretOffset: Int): Pair<String, PsiReference?> {
+        val className = file.packageFqName.asString() + "." + file.name.substringBefore(".")
+        return Pair(className, file.findReferenceAt(caretOffset))
+    }
+
+    /**
+     * Checks if the expression is a logger call.
+     */
+    private fun isLoggerCall(expression: PsiExpression?): Boolean {
+        return expression?.type?.canonicalText?.endsWith(LOGGER_SUFFIX) == true
+    }
+
+    /**
+     * Handle logger method calls like logger.info(), logger.debug(), etc.
+     */
+    private fun handleLoggerCall(
+        call: PsiMethodCallExpression?,
+        expression: PsiReferenceExpression?,
+        className: String,
+        uri: String?,
+        method: String?,
+        url: String,
+        indexValue: String,
+        params: Map<String, String>
+    ) {
+        val paramList = PsiTreeUtil.getChildOfType(call, PsiExpressionList::class.java)
+        val text = getText(paramList)
+
+        val psiIdentifier = PsiTreeUtil.getChildOfType(expression, PsiIdentifier::class.java)
+        val level = psiIdentifier?.text
+
+        if (level != null && level in listOf("info", "debug", "error", "warn")) {
+            openKibana(text, level.uppercase(), className, uri, method, url, indexValue, params)
+        }
+    }
+
+    /**
+     * Extract text from the element.
+     */
+    private fun getText(element: PsiElement?): String? {
         var literal: PsiLiteralExpression? = null
-        paramList?.accept(object : JavaRecursiveElementVisitor() {
-            override fun visitLiteralExpression(expression: PsiLiteralExpression?) {
-                if (literal == null && expression!!.type?.canonicalText == "java.lang.String") {
+
+        element?.accept(object : JavaRecursiveElementVisitor() {
+            override fun visitLiteralExpression(expression: PsiLiteralExpression) {
+                if (literal == null && expression.type?.canonicalText == STRING_TYPE) {
                     literal = expression
                 }
             }
         })
 
-        if (literal != null && literal!!.type?.canonicalText == "java.lang.String") {
-            return literal!!.value.toString()
-        }
-
-        return null
+        return literal?.value?.toString()
     }
 
-    private fun openKibana(text: String?, level: String?, loggerName: String?, uri: String?, method: String?, url: String, indexValue: String, params: Map<String, String>) {
-        val mutableParams : MutableMap<String, String> = HashMap(params)
-
+    /**
+     * Open Kibana with the provided parameters.
+     */
+    private fun openKibana(
+        text: String?,
+        level: String?,
+        loggerName: String?,
+        uri: String?,
+        method: String?,
+        url: String,
+        indexValue: String,
+        params: Map<String, String>
+    ) {
+        val mutableParams = HashMap(params)
         val index = Index(indexValue)
         val filters = Filters()
 
+        // Add filters for placeholders
         addFilterForPlaceholder(mutableParams, "%level", level, filters, index)
         addFilterForPlaceholder(mutableParams, "%logger", loggerName, filters, index)
         addFilterForPlaceholder(mutableParams, "%uri", uri, filters, index)
         addFilterForPlaceholder(mutableParams, "%httpMethod", method, filters, index)
 
+        // Handle date condition
         val dateCondition = DateCondition(mutableParams.remove("interval"))
 
-        for (param in mutableParams) {
-            filters.filters.add(Filter(index, param.key, param.value))
+        // Add remaining parameters as filters
+        mutableParams.forEach { (key, value) ->
+            filters.filters.add(Filter(index, key, value))
         }
 
-        BrowserUtil.browse(KibanaUrlBuilder(url, dateCondition, Query(Sort(), filters, index, createTextQuery(text))).create())
+        // Build and open the URL
+        val textQuery = createTextQuery(text)
+        val kibanaUrl = KibanaUrlBuilder(url, dateCondition, Query(Sort(), filters, index, textQuery)).create()
+        BrowserUtil.browse(kibanaUrl)
     }
 
+    /**
+     * Create a text query from the given text.
+     */
     private fun createTextQuery(text: String?): TextQuery? {
-        val p: Pattern = Pattern.compile("\\{}|%s")
+        if (text == null) return null
 
-        val textQuery: TextQuery? = if (text != null) {
-            val tokens = text.split(p)
-            val newValue = tokens.stream().filter { x -> x.trim().length > 2 }.map { x -> "\"" + x + "\"" }
-                .collect(Collectors.joining("AND"))
-            TextQuery(newValue)
-        } else {
-            null
-        }
-        return textQuery
+        val pattern = Pattern.compile("\\{}|%s")
+        val tokens = text.split(pattern)
+
+        val queryText = tokens.asSequence()
+            .filter { it.trim().length > 2 }
+            .map { "\"$it\"" }
+            .joinToString("AND")
+
+        return if (queryText.isNotEmpty()) TextQuery(queryText) else null
     }
 
+    /**
+     * Add a filter for a placeholder if it exists in the params.
+     */
     private fun addFilterForPlaceholder(
         params: MutableMap<String, String>,
         placeholder: String,
@@ -165,59 +251,71 @@ class KibanaUrlOpener {
         filters: Filters,
         index: Index
     ) {
-        params.filterValues { v -> v == placeholder }.forEach { (k, _) ->
-            if (resolvedValue != null) {
-                filters.filters.add(Filter(index, k, resolvedValue))
+        val keysToRemove = mutableListOf<String>()
+
+        params.forEach { (key, value) ->
+            if (value == placeholder && resolvedValue != null) {
+                filters.filters.add(Filter(index, key, resolvedValue))
+                keysToRemove.add(key)
             }
-            params.remove(k)
         }
+
+        keysToRemove.forEach { params.remove(it) }
     }
 
+    /**
+     * Parse HTTP method from Spring annotations.
+     */
     private fun parseHttpMethod(annotation: PsiAnnotation?, currentElement: PsiElement?): Pair<String?, String?> {
-        val supportedAnnotations: Map<String, String> = ImmutableMap.of(
-                "org.springframework.web.bind.annotation.GetMapping", "GET",
-                "org.springframework.web.bind.annotation.PostMapping", "POST",
-                "org.springframework.web.bind. annotation.DeleteMapping", "DELETE",
-                "ora.springframework.web.bind.annotation.PatchMapping", "PATCH")
+        if (annotation == null || annotation.nameReferenceElement?.qualifiedName !in HTTP_METHOD_ANNOTATIONS) {
+            return Pair(null, null)
+        }
 
-        var uri: String? = null
-        var method: String? = null
+        val method = HTTP_METHOD_ANNOTATIONS[annotation.nameReferenceElement?.qualifiedName]
+        var uri = extractRequestMappingFromClass(currentElement)
 
-        if (annotation != null && supportedAnnotations.containsKey(annotation.nameReferenceElement?.qualifiedName)) {
-            method = supportedAnnotations[annotation.nameReferenceElement?.qualifiedName]
-            val parentClass = PsiTreeUtil.getParentOfType(currentElement, PsiClass::class.java)
-            val modifiers = PsiTreeUtil.findChildOfType(parentClass, PsiModifierList::class.java)
-            if (modifiers != null) {
-                val classAnnotations = PsiTreeUtil.findChildrenOfAnyType(modifiers, PsiAnnotation::class.java)
-                for (classAnnotation in classAnnotations) {
-                    if (classAnnotation.nameReferenceElement?.qualifiedName.equals("org.springframework.web.bind.annotation.RequestMapping")) {
-                        val annotationParams = PsiTreeUtil.findChildrenOfAnyType(classAnnotation, PsiNameValuePair::class.java)
+        // Extract URI from the method annotation
+        val methodUri = extractValueFromAnnotation(annotation)
+        uri = if (uri.isNullOrEmpty()) methodUri else "$uri$methodUri"
 
-                        for (annotationParam in annotationParams) {
-                            val p: PsiIdentifier? = PsiTreeUtil.getChildOfType(annotationParam, PsiIdentifier::class.java)
-                            if (p == null || p.text.equals("value")) {
-                                val le = PsiTreeUtil.getChildOfType(annotationParam, PsiExpression::class.java)
-                                uri = le?.let { eval(it) }
-                                print(uri)
-                            }
-                        }
-                    }
-                }
+        return Pair(uri?.replace("\"", "")?.replace(" \\\\", "\\"), method)
+    }
+
+    /**
+     * Extract the RequestMapping value from the class.
+     */
+    private fun extractRequestMappingFromClass(element: PsiElement?): String? {
+        val parentClass = PsiTreeUtil.getParentOfType(element, PsiClass::class.java) ?: return null
+        val modifiers = PsiTreeUtil.findChildOfType(parentClass, PsiModifierList::class.java) ?: return null
+
+        val classAnnotations = PsiTreeUtil.findChildrenOfAnyType(modifiers, PsiAnnotation::class.java)
+
+        for (classAnnotation in classAnnotations) {
+            if (classAnnotation.nameReferenceElement?.qualifiedName == REQUEST_MAPPING_ANNOTATION) {
+                return extractValueFromAnnotation(classAnnotation)
             }
+        }
 
-            val annotationParams = PsiTreeUtil.findChildrenOfAnyType(annotation, PsiNameValuePair::class.java)
-            for (annotationParam in annotationParams) {
-                val p: PsiIdentifier? = PsiTreeUtil.getChildOfType(annotationParam, PsiIdentifier::class.java)
-                if (p == null || p.text.equals("value")) {
-                    if (uri == null) {
-                        uri = ""
-                    }
-                    uri += PsiTreeUtil.getChildOfType(annotationParam, PsiLiteralExpression::class.java)?.text
+        return null
+    }
+
+    /**
+     * Extract the "value" parameter from an annotation.
+     */
+    private fun extractValueFromAnnotation(annotation: PsiAnnotation): String? {
+        val annotationParams = PsiTreeUtil.findChildrenOfAnyType(annotation, PsiNameValuePair::class.java)
+
+        for (param in annotationParams) {
+            val identifier = PsiTreeUtil.getChildOfType(param, PsiIdentifier::class.java)
+
+            if (identifier == null || identifier.text == "value") {
+                val expression = PsiTreeUtil.getChildOfType(param, PsiExpression::class.java)
+                if (expression != null) {
+                    return eval(expression)
                 }
             }
         }
 
-        uri = uri?.replace("\"", "")?.replace(" \\\\", "\\")
-        return Pair(uri, method)
+        return null
     }
 }
